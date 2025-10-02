@@ -95,7 +95,7 @@ static ssize_t modlist_read(struct file *filp, char __user *buf, size_t len, lof
 		int aux_chars = sprintf(aux, "%d\n", item->data);
 		if(read_bytes + aux_chars >= MAXLEN_R-1){
 			printk(KERN_INFO "Buffer overflow!");
-			break; //OVERFLOW
+			return -ENOSPC; //OVERFLOW
 		}
 
 		int num_chars = sprintf(dest, "%d\n", item->data);

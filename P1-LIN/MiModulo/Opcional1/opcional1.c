@@ -91,16 +91,16 @@ static ssize_t modlist_read(struct file *filp, char __user *buf, size_t len, lof
 	// Copia los datos de la lista a kbuf
 	list_for_each(cur_node, &myList){
 		struct list_item* item = list_entry(cur_node, struct list_item, links);
-		int num_chars = sprintf(dest, "%s\n", item->data);
-		if(num_chars >= MAXLEN_R - read_bytes){
+		char aux[10];
+		int aux_chars = sprintf(aux, "%d\n", item->data);
+		if(read_bytes + aux_chars >= MAXLEN_R-1){
+			printk(KERN_INFO "Buffer overflow!");
 			break; //OVERFLOW
 		}
+
+		int num_chars = sprintf(dest, "%d\n", item->data);
 		dest+=num_chars; //Avanza el numero de caracteres leidos
 		read_bytes+=num_chars; //Numero de caracteres leidos en total
-		
-		if(read_bytes >= MAXLEN_R){
-			break; //OVERFLOW
-		}
 	}
 	
 	if (len<read_bytes)
