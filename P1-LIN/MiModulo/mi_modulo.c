@@ -69,6 +69,9 @@ static ssize_t modlist_write(struct file *filp, const char __user *buf, size_t l
 			kfree(item); //libera la memoria del nodo
 		}
 	}
+	else{
+		return -EINVAL;
+	}
 	
 	(*off)+=len;  //Se avanza en el desriptor de fichero
 	return len;
@@ -88,23 +91,25 @@ static ssize_t modlist_read(struct file *filp, char __user *buf, size_t len, lof
 	// Copia los datos de la lista a kbuf
 	list_for_each(cur_node, &myList){
 		struct list_item* item = list_entry(cur_node, struct list_item, links);
-		int num_chars = sprintf(dest, "%d\n", item->data);
-		if(num_chars >= MAXLEN_R - read_bytes){
+		char aux[10];
+		int aux_chars = sprintf(aux, "%d\n", item->data);
+		if(read_bytes + aux_chars >= MAXLEN_R-1){
+			printk(KERN_INFO "Buffer overflow!");
 			break; //OVERFLOW
 		}
+
+		int num_chars = sprintf(dest, "%d\n", item->data);
+		
 		dest+=num_chars; //Avanza el numero de caracteres leidos
 		read_bytes+=num_chars; //Numero de caracteres leidos en total
 		
-		if(read_bytes >= MAXLEN_R){
-			break; //OVERFLOW
-		}
 	}
 	
 	if (len<read_bytes)
-	return -ENOSPC; //No hay espacio suficiente en el buffer de usuario
+		return -ENOSPC; //No hay espacio suficiente en el buffer de usuario
 	
 	if(copy_to_user(buf, kbuf, read_bytes))
-	return -EINVAL; //Error al copiar a espacio de usuario
+		return -EINVAL; //Error al copiar a espacio de usuario
 	
 	(*off)+=len; //Avanza el descriptor de fichero
 	return read_bytes;
