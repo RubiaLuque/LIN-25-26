@@ -26,6 +26,17 @@ static inline int set_leds(struct tty_driver* handler, unsigned int mask){
     return (handler->ops->ioctl) (vc_cons[fg_console].d->port.tty, KDSETLED,mask);
 }
 
+/*
+    leds:
+    bit 2: encender/apagar Num Lock
+    bit 1: encender/apagar Caps Lock
+    bit 0: encender/apagar Scroll Lock
+
+*/
+static long ledctl(unsigned int leds){
+    
+}
+
 static int __init modleds_init(void)
 {	
    kbd_driver= get_kbd_driver_handler();
