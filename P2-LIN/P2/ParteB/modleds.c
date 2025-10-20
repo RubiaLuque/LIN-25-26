@@ -33,23 +33,8 @@ static inline int set_leds(struct tty_driver* handler, unsigned int mask){
     bit 0: encender/apagar Scroll Lock
 
 */
-static long ledctl(unsigned int leds){
-    
-}
 
-static int __init modleds_init(void)
-{	
-   kbd_driver= get_kbd_driver_handler();
-   set_leds(kbd_driver,ALL_LEDS_ON); 
-   return 0;
-}
 
-static void __exit modleds_exit(void){
-    set_leds(kbd_driver,ALL_LEDS_OFF); 
-}
-
-module_init(modleds_init);
-module_exit(modleds_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Modleds");
