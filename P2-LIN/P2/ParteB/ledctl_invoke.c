@@ -7,10 +7,10 @@
 #include <sys/syscall.h>
 #include <errno.h>
 
-#define SYS_LEDS 451 //Nuevo valor en la tabla del kernel para llamadas al sistema que se encarga de gestionar los leds
+#define SYS_LEDCTL 451 //Nuevo valor en la tabla del kernel para llamadas al sistema que se encarga de gestionar los leds
 
 int ledctl(unsigned int leds){
-    return (int) syscall(SYS_LEDS, leds);
+    return (int) syscall(SYS_LEDCTL, leds);
 }
 
 int main(int argc, char* argv[]){
