@@ -27,7 +27,7 @@ static inline int set_leds(struct tty_driver* handler, unsigned int mask){
 }
 
 
-SYSCALL_DEFINE1(lectl, unsigned int, leds){
+SYSCALL_DEFINE1(ledctl, unsigned int, leds){
     //Valor soportado de leds
     if(leds<0 || leds > 7) return -1;
 
