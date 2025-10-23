@@ -15,7 +15,7 @@ int ledctl(unsigned int leds){
 
 int main(int argc, char* argv[]){
 
-    if (argc!= 1) {
+    if (argc!= 2) {
 		fprintf(stderr,"Usage: ./ledctl_invoke <ledmask>\n");
 		exit(EXIT_FAILURE);
 	}
