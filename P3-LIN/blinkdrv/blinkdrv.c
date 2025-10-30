@@ -21,6 +21,8 @@
 #include <linux/usb.h>
 #include <linux/mutex.h>
 #include <linux/version.h>
+#include <linux/string.h>
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,1)
 #define __cconst__ const
 #else
@@ -106,7 +108,7 @@ static int blink_release(struct inode *inode, struct file *file)
 
 
 
-#define NR_SAMPLE_COLORS 4
+//#define NR_SAMPLE_COLORS 4
 
 unsigned int sample_colors[]={0x000011, 0x110000, 0x001100, 0x000000};
 
@@ -116,41 +118,50 @@ static ssize_t blink_write(struct file *file, const char *user_buffer,
 {
 	struct usb_blink *dev=file->private_data;
 	int retval = 0;
-	int i=0;
 	unsigned char* message;
-	static int color_cnt=0;
 	unsigned int color;
-
+	char* kbuf = NULL;
+	unsigned int colors[8]; //Vector de colores
+	char* token = NULL;
+	char* aux = kbuf;
+	//Se reserva memoria para la longitud del mensaje recibido
 	message=kmalloc(NR_BYTES_BLINK_MSG,GFP_DMA);
 	
-	/* Pick a color and get ready for the next invocation*/		
-	color=sample_colors[color_cnt++];
+	//Valores por defecto de message: Todos los leds a negro
+	message[0] = '\x05';
+	message[1] = 0x00;
+	for(int i=0;i<8;++i){
+		colors[i]=0;
+	}
 
-	/* Reset the color counter if necessary */	
-	if (color_cnt == NR_SAMPLE_COLORS)
-		color_cnt=0;
-	
-	/* zero fill*/
-	memset(message,0,NR_BYTES_BLINK_MSG);
+	//Copiar cadena alojada en user_buffer a buffer auxiliar (kbuf). No olvidar incluir el terminador ('\0')...
+	strcpy(kbuf, user_buffer);
+	size_t size = strlen(kbuf);
+	kbuf[size] = '\0';
+	/*Hacer el parsing de la cadena en kbuf:
+ 	- Partir en tokens separados con ',' con strsep()
+ 	- Analizar el contenido de cada par (ledn,color) con sscanf() 
+ 	- Rellenar el mensaje correspondiente para el LED en cuestión en messages*/
+	while((token = strsep(&aux, ','))){
+		unsigned int led, color;
+		if((sscanf(token, "%d:%x",&led, &color)) ==2){
+			if(led<0 || led >7){
+				printk("Invalid led number.\n");
+				return -EINVAL;
+			}
 
-	/* Fill up the message accordingly */
-	message[0]='\x05';
-	message[1]=0x00;
-	message[2]=0; 
-	message[3]=((color>>16) & 0xff);
- 	message[4]=((color>>8) & 0xff);
- 	message[5]=(color & 0xff);
+			colors[led] = color;
+		}
+	}
 
 
-	for (i=0;i<NR_LEDS;i++){
+	for(int i = 0; i<NR_LEDS; ++i){
+			message[2]=i;
+			message[3]=((colors[i]>>16) & 0xff);
+ 			message[4]=((colors[i]>>8) & 0xff);
+ 			message[5]=(colors[i] & 0xff);
 
-		message[2]=i; /* Change Led number in message */
-	
-		/* 
-		 * Send message (URB) to the Blinkstick device 
-		 * and wait for the operation to complete 
-		 */
-		retval=usb_control_msg(dev->udev,	
+			retval=usb_control_msg(dev->udev,	
 			 usb_sndctrlpipe(dev->udev,00), /* Specify endpoint #0 */
 			 USB_REQ_SET_CONFIGURATION, 
 			 USB_DIR_OUT| USB_TYPE_CLASS | USB_RECIP_DEVICE,
