@@ -1,0 +1,69 @@
+
+1. ¿Cuál es la ruta (path) del fichero de dispositivo que se crea automáticamente al cargar el módulo?
+- Chardev2: 
+    [ 3844.847436] chardev: loading out-of-tree module taints kernel.
+    [ 3844.850654] I was assigned major number 248. To talk to
+    [ 3844.850656] the driver try to cat and echo to /dev/chardev.
+
+- ChardevMisc:
+    [ 3981.471791] misc chardev_misc: I was assigned major number 10. To talk to
+    [ 3981.471797] misc chardev_misc: the driver try to cat and echo to /dev/chardev_misc.
+
+2. ¿En qué fichero especial del sistema puede consultarse el major number asignado al driver correspondiente?
+Se puede consultar en /proc/devices:
+
+kernel@debian:~/Documentos/LIN-25-26/P3-LIN/Ejercicios/Ejercicio1/ChardevMisc$ cat /proc/devices
+Character devices:
+  1 mem
+  .
+  .
+  .
+
+ 10 misc
+ .
+ .
+ .
+ 226 drm
+ 248 chardev
+ 249 hidraw
+ .
+ .
+ .
+
+
+3. ¿Qué minor number tiene asociado cada uno de los ficheros especiales creados al cargar los módulos del kernel? ¿Qué llamada del driver se encarga de asignar ese minor number?
+
+- Chardev2:
+
+kernel@debian:~/Documentos/LIN-25-26/P3-LIN/Ejercicios/Ejercicio1/ChardevMisc$ stat /dev/chardev
+  Fichero: /dev/chardev
+  Tamaño: 0             Bloques: 0          Bloque E/S: 4096   fichero especial de caracteres
+Device: 0,5     Inode: 703         Links: 1     Device type: 248,0      <-----MAJOR,MINOR
+Acceso: (0666/crw-rw-rw-)  Uid: (    0/    root)   Gid: (    0/    root)
+      Acceso: 2025-11-02 19:50:11.756961849 +0100
+Modificación: 2025-11-02 19:50:11.756961849 +0100
+      Cambio: 2025-11-02 19:50:11.756961849 +0100
+    Creación: 2025-11-02 19:50:11.756961849 +0100
+
+- ChardevMisc:
+
+kernel@debian:~/Documentos/LIN-25-26/P3-LIN/Ejercicios/Ejercicio1/ChardevMisc$ stat /dev/chardev_misc 
+  Fichero: /dev/chardev_misc
+  Tamaño: 0             Bloques: 0          Bloque E/S: 4096   fichero especial de caracteres
+Device: 0,5     Inode: 705         Links: 1     Device type: 10,122       <-----MAJOR,MINOR
+Acceso: (0666/crw-rw-rw-)  Uid: (    0/    root)   Gid: (    0/    root)
+      Acceso: 2025-11-02 19:52:28.399685311 +0100
+Modificación: 2025-11-02 19:52:28.399685311 +0100
+      Cambio: 2025-11-02 19:52:28.399685311 +0100
+    Creación: 2025-11-02 19:52:28.399685311 +0100
+
+
+La llamada al driver que se encarga de asignar dicho minor number es alloc_chrdev_region().
+
+
+4. ¿Qué sucede al escribir en el fichero especial de dispositivo (p.ej., echo hello > /dev/chardev)? ¿Por que se produce este comportamiento?
+
+kernel@debian:~/Documentos/LIN-25-26/P3-LIN/Ejercicios/Ejercicio1/ChardevMisc$ echo hello > /dev/chardev
+bash: echo: error de escritura: Operación no permitida
+
+Ocurre esto porque todavía no se ha creado un fichero de caracteres asociado al driver usando mknod.

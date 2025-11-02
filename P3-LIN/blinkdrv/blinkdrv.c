@@ -22,6 +22,7 @@
 #include <linux/mutex.h>
 #include <linux/version.h>
 #include <linux/string.h>
+#include <linux/uaccess.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,2,1)
 #define __cconst__ const
@@ -110,7 +111,7 @@ static int blink_release(struct inode *inode, struct file *file)
 
 //#define NR_SAMPLE_COLORS 4
 
-unsigned int sample_colors[]={0x000011, 0x110000, 0x001100, 0x000000};
+//unsigned int sample_colors[]={0x000011, 0x110000, 0x001100, 0x000000};
 
 /* Called when a user program invokes the write() system call on the device */
 static ssize_t blink_write(struct file *file, const char *user_buffer,
@@ -142,9 +143,9 @@ static ssize_t blink_write(struct file *file, const char *user_buffer,
  	- Partir en tokens separados con ',' con strsep()
  	- Analizar el contenido de cada par (ledn,color) con sscanf() 
  	- Rellenar el mensaje correspondiente para el LED en cuestión en messages*/
-	while((token = strsep(&aux, ','))){
+	while((token = strsep(&aux, ","))!=NULL){
 		unsigned int led, color;
-		if((sscanf(token, "%d:%x",&led, &color)) ==2){
+		if((sscanf(token, "%d:%x",&led, &color))!=0){
 			if(led<0 || led >7){
 				printk("Invalid led number.\n");
 				return -EINVAL;
