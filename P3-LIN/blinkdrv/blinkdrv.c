@@ -120,11 +120,14 @@ static ssize_t blink_write(struct file *file, const char *user_buffer,
 	struct usb_blink *dev=file->private_data;
 	int retval = 0;
 	unsigned char* message;
-	unsigned int color;
-	char* kbuf = NULL;
+	char kbuf[90];
 	unsigned int colors[8]; //Vector de colores
 	char* token = NULL;
 	char* aux = kbuf;
+
+	if (len>90)
+		return -ENOSPC;
+
 	//Se reserva memoria para la longitud del mensaje recibido
 	message=kmalloc(NR_BYTES_BLINK_MSG,GFP_DMA);
 	
@@ -136,25 +139,36 @@ static ssize_t blink_write(struct file *file, const char *user_buffer,
 	}
 
 	//Copiar cadena alojada en user_buffer a buffer auxiliar (kbuf). No olvidar incluir el terminador ('\0')...
-	strcpy(kbuf, user_buffer);
-	size_t size = strlen(kbuf);
-	kbuf[size] = '\0';
+	if(copy_from_user(kbuf, user_buffer, len)){
+		retval=-EFAULT;
+		goto out_error;
+	}
+
+	kbuf[len] = '\0';
 	/*Hacer el parsing de la cadena en kbuf:
  	- Partir en tokens separados con ',' con strsep()
  	- Analizar el contenido de cada par (ledn,color) con sscanf() 
  	- Rellenar el mensaje correspondiente para el LED en cuestión en messages*/
-	while((token = strsep(&aux, ","))!=NULL){
-		unsigned int led, color;
-		if((sscanf(token, "%d:%x",&led, &color))!=0){
-			if(led<0 || led >7){
-				printk("Invalid led number.\n");
-				return -EINVAL;
+	if(strcmp(kbuf, "\n")!=0){
+		
+	
+		while((token = strsep(&aux, ","))!=NULL){
+			unsigned int led, color;
+			if((sscanf(token, "%u:0x%x",&led, &color))!=2){
+				printk(KERN_ALERT "Invalid format\n");
+				retval=-EINVAL;
+				goto out_error;
+			}
+			
+			if(led >7){
+				printk(KERN_ALERT "Invalid led number.\n");
+				retval=-EINVAL;
+				goto out_error;
 			}
 
 			colors[led] = color;
 		}
 	}
-
 
 	for(int i = 0; i<NR_LEDS; ++i){
 			message[2]=i;

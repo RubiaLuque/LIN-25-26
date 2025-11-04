@@ -66,4 +66,4 @@ La llamada al driver que se encarga de asignar dicho minor number es alloc_chrde
 kernel@debian:~/Documentos/LIN-25-26/P3-LIN/Ejercicios/Ejercicio1/ChardevMisc$ echo hello > /dev/chardev
 bash: echo: error de escritura: Operación no permitida
 
-Ocurre esto porque todavía no se ha creado un fichero de caracteres asociado al driver usando mknod.
+
