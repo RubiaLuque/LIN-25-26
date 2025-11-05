@@ -5,6 +5,7 @@
 #include <asm-generic/errno.h>
 #include <linux/gpio.h>
 #include <linux/delay.h>
+#include <linux/string.h>
 
 MODULE_DESCRIPTION("Misc Display7s Kernel Module - FDI-UCM");
 MODULE_AUTHOR("Juan Carlos Saez");
@@ -20,6 +21,8 @@ MODULE_LICENSE("GPL");
 #define DS_G 0x02
 #define DS_DP 0x01
 #define SEGMENT_COUNT 8
+
+#define MAX_LEN 16
 
 /* Indices of GPIOs used by this module */
 enum
@@ -39,7 +42,26 @@ struct gpio_desc *gpio_descriptors[NR_GPIO_DISPLAY];
 const char *display_gpio_str[NR_GPIO_DISPLAY] = {"sdi", "rclk", "srclk"};
 
 /* Sequence of segments used by the character device driver */
-const int sequence[] = {DS_D, DS_E, DS_F, DS_A, DS_B, DS_C, DS_G, DS_DP, -1};
+//const int sequence[] = {DS_D, DS_E, DS_F, DS_A, DS_B, DS_C, DS_G, DS_DP, -1};
+
+const int num_codes[MAX_LEN] = {
+	DS_A | DS_B | DS_C | DS_D | DS_E | DS_F,         // 0
+	DS_B | DS_C,                                     // 1
+	DS_A | DS_B | DS_D | DS_E | DS_G,                // 2
+	DS_A | DS_B | DS_C | DS_D | DS_G,                // 3
+	DS_B | DS_C | DS_F | DS_G,                       // 4
+	DS_A | DS_C | DS_D | DS_F | DS_G,                // 5
+	DS_A | DS_C | DS_D | DS_E | DS_F | DS_G,         // 6
+	DS_A | DS_B | DS_C,                              // 7
+	DS_A | DS_B | DS_C | DS_D | DS_E | DS_F | DS_G,  // 8
+	DS_A | DS_B | DS_C | DS_D | DS_F | DS_G,         // 9
+	DS_A | DS_B | DS_C | DS_E | DS_F | DS_G,         // A
+	DS_C | DS_D | DS_E | DS_F | DS_G,                // B
+	DS_A | DS_D | DS_E | DS_F,                       // C
+	DS_B | DS_C | DS_D | DS_E | DS_G,                // D
+	DS_A | DS_D | DS_E | DS_F | DS_G,                // E
+	DS_A | DS_E | DS_F | DS_G                        // F
+};
 
 #define DEVICE_NAME "display7s" /* Device name */
 
@@ -99,20 +121,32 @@ static void update_7sdisplay(unsigned char data)
 static ssize_t
 display7s_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
-	/* The variable is defined as static to have a counter value that persists across invocations of display7s_write */
-	static int counter = 0;
+	char kbuf;
+	char* aux = kbuf;
+	
+	unsigned int value;
 
-	/* Update the corresponding value in the display */
-	update_7sdisplay(sequence[counter]);
+	if(len>8)
+		return -EINVAL;
 
-	/* Update counter in preparation for next invocation of the function */
-	counter++;
+	
+	if (copy_from_user(kbuf, buff, len))
+		return -EFAULT;
 
-	/* Reset counter if end marker is found */
-	if (sequence[counter] == -1)
-		counter = 0;
+	kbuf[len] = '\0';
 
-	return len;
+	if(sscanf(&aux[0], "%x", &value) != 1){
+		return -EINVAL;
+	}
+
+	if(value >= MAX_LEN ){
+		return -EINVAL;
+	}
+
+	
+
+
+
 }
 
 static int __init display7s_misc_init(void)
