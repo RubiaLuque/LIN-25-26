@@ -60,7 +60,7 @@ const int led_gpio[NR_GPIO_LEDS] = {25, 27, 4};
 /* Array to hold gpio descriptors */
 struct gpio_desc *gpio_descriptors[NR_GPIO_LEDS];
 
-static char *cool_devnode(const struct device *dev, umode_t *mode)
+static char *cool_devnode(struct device *dev, umode_t *mode)
 {
   if (!mode)
     return NULL;
@@ -180,7 +180,24 @@ int init_module(void)
   return 0;
 
 // ERRORES
-#pragma region ErrorHandling
+
+err_handle:
+  for (j = 0; j < i; j++)
+    gpiod_put(gpio_descriptors[j]);
+  
+  if (ddata)
+  kfree(ddata);
+  class_destroy(class);
+
+  /* Destroy modled */
+  if (modledspi)
+  {
+    cdev_del(modledspi);
+    modledspi = NULL;
+  }
+
+  goto error_alloc;
+  return err;
 
 error_device:
   if (ddata)
@@ -207,12 +224,7 @@ error_alloc:
 
   return ret;
 
-err_handle:
-  for (j = 0; j < i; j++)
-    gpiod_put(gpio_descriptors[j]);
-  return err;
 
-#pragma endregion
 }
 
 void cleanup_module(void)
@@ -269,7 +281,7 @@ static int device_open(struct inode *inode, struct file *file)
   ddata->Device_Open++;
 
   /* Initialize msg */
-  printk(KERN_ALERT "GPI dev module successfully opened opened\n");
+  printk(KERN_ALERT "GPI dev module successfully opened\n");
 
   /* Initially, this points to the beginning of the message */
   ddata->msg_Ptr = ddata->msg;
@@ -305,7 +317,7 @@ static ssize_t device_write(struct file *file, const char *buffer, size_t length
 {
   char kbuf[BUF_LEN];
   unsigned int led_mask = ALL_LEDS_OFF;
-  
+
   if (length > BUF_LEN - 1)
     return -ENOSPC;
 
@@ -329,7 +341,7 @@ static ssize_t device_write(struct file *file, const char *buffer, size_t length
     return -EINVAL;
   }
 
-  led_mask= ((led_mask&0x00F) << 2)| (led_mask&0x0F0) | ((led_mask&0xF00) >> 2);
+  led_mask= ((led_mask&0x1) << 2)| (led_mask&0x2) | ((led_mask&0x4) >> 2);
   set_pi_leds(led_mask);
 
   return length;

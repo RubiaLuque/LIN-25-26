@@ -121,13 +121,11 @@ static void update_7sdisplay(unsigned char data)
 static ssize_t
 display7s_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
-	char kbuf[2];
-	char* aux = kbuf;
-	int i;
+	char kbuf[10];
 	unsigned int value;
 
 
-	if(len>2)
+	if(len>10)
 		return -EINVAL;
 
 	
@@ -136,7 +134,7 @@ display7s_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 
 	kbuf[len] = '\0';
 
-	if(sscanf(&aux[0], "%x", &value) != 1){
+	if(sscanf(kbuf, "%x", &value) != 1){
 		return -EINVAL;
 	}
 
@@ -144,27 +142,7 @@ display7s_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 		return -EINVAL;
 	}
 
-	int data = num_codes[value];
-	for (i = 0; i < SEGMENT_COUNT; i++)
-	{
-		/* Explore current bit (from most significant to least significant) */
-		if (0x80 & (data << i))
-			value = 1;
-		else
-			value = 0;
-
-		/* Set value of serial input */
-		gpiod_set_value(gpio_descriptors[SDI_IDX], value);
-		/* Generate clock cycle in shift register */
-		gpiod_set_value(gpio_descriptors[SRCLK_IDX], 1);
-		msleep(1);
-		gpiod_set_value(gpio_descriptors[SRCLK_IDX], 0);
-	}
-
-	/* Generate clock cycle in output register to update 7-seg display */
-	gpiod_set_value(gpio_descriptors[RCLK_IDX], 1);
-	msleep(1);
-	gpiod_set_value(gpio_descriptors[RCLK_IDX], 0);
+	update_7sdisplay(num_codes[value]);
 
 
 	return len;
