@@ -106,13 +106,13 @@ static int blink_release(struct inode *inode, struct file *file)
 
 #define NR_LEDS 8
 #define NR_BYTES_BLINK_MSG 6
-
+#define KBUF_LEN 90
 
 
 //#define NR_SAMPLE_COLORS 4
 
 //unsigned int sample_colors[]={0x000011, 0x110000, 0x001100, 0x000000};
-
+// echo 0:0x110000,1:0x2211001,2:0x1111000,3:0x002200,4:0x001111,5:0x000008,6:0x111111,7:0x222222 > /dev/usb/blinkstick0  (Arcoiris Parte opcional)
 /* Called when a user program invokes the write() system call on the device */
 static ssize_t blink_write(struct file *file, const char *user_buffer,
 			  size_t len, loff_t *off)
@@ -120,12 +120,12 @@ static ssize_t blink_write(struct file *file, const char *user_buffer,
 	struct usb_blink *dev=file->private_data;
 	int retval = 0;
 	unsigned char* message;
-	char kbuf[90];
-	unsigned int colors[8]; //Vector de colores
+	char kbuf[KBUF_LEN];
+	unsigned int colors[NR_LEDS]; //Vector de colores
 	char* token = NULL;
 	char* aux = kbuf;
 
-	if (len>90)
+	if (len>KBUF_LEN)
 		return -ENOSPC;
 
 	//Se reserva memoria para la longitud del mensaje recibido
