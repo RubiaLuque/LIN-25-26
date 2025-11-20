@@ -23,8 +23,8 @@ struct list_item {
 
 static struct proc_dir_entry *proc_entry;
 
-static LIST_HEAD(myList);
-static DEFINE_RWLOCK(RW_lock); //Define un spinlock
+LIST_HEAD(myList);
+DEFINE_RWLOCK(rw_lock); //Define un spinlock
 
 //USO: escribe/elimina en la lista lo que se recibe desde espacio de usuario
 //buf es un puntero al espacio de usuario y len el numero de caracteres almacenados en buf
@@ -127,11 +127,6 @@ static ssize_t modlist_read(struct file *filp, char __user *buf, size_t len, lof
 	
 }
 
-/* Declaración de funciones init y exit */
-static const struct proc_ops proc_entry_fops = {
-	.proc_read = modlist_read,
-	.proc_write = modlist_write,    
-};
 
 /* Función que se invoca cuando se carga el módulo en el kernel */
 int modulo_lin_init(void)
@@ -151,14 +146,28 @@ int modulo_lin_init(void)
 /* Función que se invoca cuando se descarga el módulo del kernel */
 void modulo_lin_clean(void)
 {
-    //Comprobar que no se está accediendo al modulo antes de eliminarlo
-    if(module_refcount(THIS_MODULE) != 0){
-        printk(KERN_INFO "Modlist Safe: Module is busy, can't be removed\n");
-        return;
-    }
 	remove_proc_entry("modlist_safe", NULL);
 	printk(KERN_INFO "Modlist Safe: Module unloaded.\n");
 }
+
+static int modlist_open(struct inode *, struct file*){
+	try_module_get(THIS_MODULE);
+	return SUCCESS;
+}
+
+static int modlist_release(struct inode*, struct file*){
+	module_put(THIS_MODULE);
+	
+	return 0;
+}
+
+/* Declaración de funciones init y exit */
+static const struct proc_ops proc_entry_fops = {
+	.proc_read = modlist_read,
+	.proc_write = modlist_write,
+	.proc_open = modlist_open,
+	.proc_release = modlist_release    
+};
 
 module_init(modulo_lin_init);
 module_exit(modulo_lin_clean);

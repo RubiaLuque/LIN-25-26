@@ -118,9 +118,22 @@ static ssize_t prodcons_read(struct file *filp, char __user *buf, size_t len, lo
     return nr_bytes;
 }
 
+static int prodcons_open(struct inode *, struct file*){
+	try_module_get(THIS_MODULE);
+	return SUCCESS;
+}
+
+static int prodcons_release(struct inode*, struct file*){
+	module_put(THIS_MODULE);
+
+	return 0;
+}
+
 static struct file_operations fops = {
     .read = prodcons_read,
     .write = prodcons_write,
+    .open = prodcons_open,
+    .release = prodcons_release
 };
 
 
