@@ -61,7 +61,9 @@ static ssize_t prodcons_write(struct file *filp, const char __user *buf, size_t 
     }
 
     //---SECCION CRITICA---
-
+    if (down_interruptible(&huecos))
+        return -EINTR;
+        
     if(down_interruptible(&mtx)){
         up(&huecos);
         return -EINTR;
@@ -90,6 +92,9 @@ static ssize_t prodcons_read(struct file *filp, char __user *buf, size_t len, lo
         return 0;
         
     //---SECCION CRITICA---
+
+    if (down_interruptible(&elementos))
+        return -EINTR;
 
     if(down_interruptible(&mtx)){
         up(&elementos);
