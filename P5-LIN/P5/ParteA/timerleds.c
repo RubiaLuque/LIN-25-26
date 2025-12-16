@@ -8,6 +8,10 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/timer.h>
+#include <linux/workqueue.h>
+#include <linux/spinlock.h>
+
+#define MANUAL_DEBOUNCE
 
 #define ALL_LEDS_ON 0x7
 #define ALL_LEDS_OFF 0
@@ -24,13 +28,9 @@ struct gpio_desc* desc_button = NULL;
 static int gpio_button_irqn = -1;
 static int led_state = ALL_LEDS_ON;
 
-#define SEQ_LEN 80
-static unsigned char* sequence = "000:001:010:011:100:101:110:111";
-static unsigned int sequence_array[SEQ_LEN];
+static unsigned int sequence_array[] = {000, 001, 010, 011, 100, 101, 110, 111};
 static int seq_index = 0;
-module_param(sequence, charp, &sequence, 0666);
-MODULE_PARM_DESC(sequence, "LEDs on/off sequence");
-
+static int activate_timer = 0; //0--> No esta activado, 1--> Si esta activado
 
 static unsigned int timer_period_ms = 1000; //1 segundo
 static unsigned long timer_period_jiffies;
@@ -40,35 +40,10 @@ MODULE_PARM_DESC(timer_period_ms, "Timer duration (in ms)");
 //Timer
 struct timer_list timer;
 
+//Workqueue + spinlock
+struct work_struct work;
+DEFINE_SPINLOCK(timer_spinlock);
 
-
-static int parse_sequence(){
-    char* token = NULL;
-    char* aux = sequence;
-    int length = strlen(sequence);
-    if(length > SEQ_LEN){
-        printk(KERN_ALERT "Error: Sequence too large\n");
-        return 1;
-    }
-    
-    if(strcmp(sequence, "\n")!=0){
-        int i = 0;
-        while((token=strsep(&aux, ":"))!=NULL){
-            unsigned int mask;
-            if((sscanf(token, "%u", &mask))!=1){
-                return 1;
-            }
-
-            //gestion comprobar que sea todo 1 o 0
-
-
-            sequence_array[i] = mask;
-            ++i;
-        }
-        sequence_array[i]=-1; //Indica donde acaba
-    }
-    return 0;
-}
 
 /* Set led state to that specified by mask */
 static inline int set_pi_leds(unsigned int mask) {
@@ -78,10 +53,45 @@ static inline int set_pi_leds(unsigned int mask) {
   return 0;
 }
 
+static void timer_work_handler(struct work_struct* work){
+    unsigned long irq_flags;
+
+    //Desactiva las interrupciones y guarda las flags. Obtiene el spinlock
+    spin_lock_irqsave(&timer_spinlock, irq_flags); 
+
+    if(activate_timer){
+        activate_timer = 0;
+        spin_unlock_irqrestore(&timer_spinlock, irq_flags);
+        del_timer_sync(&timer);
+        printk(KERN_INFO "Pause\n");
+    }
+    else{
+        activate_timer = 1;
+        timer.expires = jiffies + timer_period_jiffies;
+        add_timer(&timer);
+        spin_unlock_irqrestore(&timer_spinlock, irq_flags);
+        printk(KERN_INFO "Resume\n");
+    }
+
+
+}
+
 /* Interrupt handler for button **/
 static irqreturn_t gpio_irq_handler(int irq, void *dev_id)
 {
+    #ifdef MANUAL_DEBOUNCE
+    static unsigned long last_interrupt = 0;
+    unsigned long diff = jiffies - last_interrupt;
+    if (diff < 20)
+        return IRQ_HANDLED;
 
+    last_interrupt = jiffies;
+    #endif
+
+    //Difiere el trabajo usando una workqueue para detener/reanudar el timer
+    schedule_work(&work);
+
+    return IRQ_HANDLED;
 }
 
 static int leds_seq(unsigned int led_mask){
@@ -160,11 +170,7 @@ static int __init timerleds_init(void){
                    "button_leds",
                    NULL)){
         pr_err("my_device: cannot register IRQ");
-        goto err_handle;
-    }
-
-    if(parse_sequence()){
-        pr_err("Invalid sequence format\n");
+        err = -EINVAL;
         goto err_handle;
     }
 
@@ -174,6 +180,8 @@ static int __init timerleds_init(void){
     add_timer(&timer);
     timer_period_jiffies = msecs_to_jiffies(timer_period_ms);
 
+    //------GESTION WORKQUEUE-----
+    INIT_WORK(&work, timer_work_handler);
 
     return 0;
 
@@ -200,6 +208,7 @@ static void __exit timerleds_exit(void){
     gpiod_put(desc_button);
     kfree(sequence_array);
     del_timer_sync(&timer);
+    flush_scheduled_work(&work);
 }
 
 module_init(timerleds_init);
