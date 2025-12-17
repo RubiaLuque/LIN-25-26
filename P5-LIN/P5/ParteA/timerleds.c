@@ -201,6 +201,8 @@ err_handle:
 
 static void __exit timerleds_exit(void){
     int i = 0;
+    
+    del_timer_sync(&timer);
     set_pi_leds(ALL_LEDS_OFF);
     
     for(i=0; i<NR_GPIO_LEDS; ++i){
@@ -208,7 +210,6 @@ static void __exit timerleds_exit(void){
     }
     free_irq(gpio_button_irqn, NULL);
     gpiod_put(desc_button);
-    del_timer_sync(&timer);
     flush_scheduled_work();
 }
 
