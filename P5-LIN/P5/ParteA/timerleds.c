@@ -32,7 +32,7 @@ static int gpio_button_irqn = -1;
 
 static int sequence_array[9] = {000, 001, 010, 011, 100, 101, 110, 111, -1};
 static int seq_index = 0;
-static int activate_timer = 0; //0--> No esta activado, 1--> Si esta activado
+static int activate_timer = 1; //0--> No esta activado, 1--> Si esta activado
 
 static unsigned int timer_period_ms = 1000; //1 segundo
 static unsigned long timer_period_jiffies;
@@ -201,14 +201,13 @@ err_handle:
 
 static void __exit timerleds_exit(void){
     int i = 0;
-    free_irq(gpio_button_irqn, NULL);
     set_pi_leds(ALL_LEDS_OFF);
-
+    
     for(i=0; i<NR_GPIO_LEDS; ++i){
         gpiod_put(gpio_descriptors[i]);
     }
+    free_irq(gpio_button_irqn, NULL);
     gpiod_put(desc_button);
-    kfree(sequence_array);
     del_timer_sync(&timer);
     flush_scheduled_work();
 }
