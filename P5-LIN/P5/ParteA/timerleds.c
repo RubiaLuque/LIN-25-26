@@ -10,6 +10,9 @@
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 #include <linux/spinlock.h>
+#include <linux/init.h>
+#include <linux/stat.h>
+
 
 #define MANUAL_DEBOUNCE
 
@@ -27,13 +30,13 @@ struct gpio_desc* gpio_descriptors[NR_GPIO_LEDS];
 struct gpio_desc* desc_button = NULL;
 static int gpio_button_irqn = -1;
 
-static unsigned int sequence_array[] = {000, 001, 010, 011, 100, 101, 110, 111};
+static int sequence_array[9] = {000, 001, 010, 011, 100, 101, 110, 111, -1};
 static int seq_index = 0;
 static int activate_timer = 0; //0--> No esta activado, 1--> Si esta activado
 
 static unsigned int timer_period_ms = 1000; //1 segundo
 static unsigned long timer_period_jiffies;
-module_param(timer_period_ms, uint, 0777);
+module_param(timer_period_ms, uint, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
 MODULE_PARM_DESC(timer_period_ms, "Timer duration (in ms)");
 
 //Timer
@@ -101,7 +104,7 @@ static void leds_seq(unsigned int led_mask){
 //Funcion a invocar cuando el timer acaba
 static void fire_timer(struct timer_list *t){
 
-    if(seq_index!=-1){
+    if(sequence_array[seq_index]!=-1){
         leds_seq(sequence_array[seq_index]);
         seq_index++;
     }
