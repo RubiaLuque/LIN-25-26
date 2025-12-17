@@ -26,7 +26,6 @@ struct gpio_desc* gpio_descriptors[NR_GPIO_LEDS];
 #define GPIO_BUTTON 22
 struct gpio_desc* desc_button = NULL;
 static int gpio_button_irqn = -1;
-static int led_state = ALL_LEDS_ON;
 
 static unsigned int sequence_array[] = {000, 001, 010, 011, 100, 101, 110, 111};
 static int seq_index = 0;
@@ -34,7 +33,7 @@ static int activate_timer = 0; //0--> No esta activado, 1--> Si esta activado
 
 static unsigned int timer_period_ms = 1000; //1 segundo
 static unsigned long timer_period_jiffies;
-module_param(timer_period_ms, unsigned int, 0666);
+module_param(timer_period_ms, uint, 0777);
 MODULE_PARM_DESC(timer_period_ms, "Timer duration (in ms)");
 
 //Timer
@@ -94,7 +93,7 @@ static irqreturn_t gpio_irq_handler(int irq, void *dev_id)
     return IRQ_HANDLED;
 }
 
-static int leds_seq(unsigned int led_mask){
+static void leds_seq(unsigned int led_mask){
     led_mask=((led_mask&0x1) << 2)| (led_mask&0x2) | ((led_mask&0x4) >> 2);
     set_pi_leds(led_mask);
 }
@@ -190,7 +189,7 @@ err_handle:
         gpiod_put(gpio_descriptors[j]);
     
     if(gpio_out_ok)
-        gpio_put(desc_button);
+        gpiod_put(desc_button);
     
     del_timer_sync(&timer);
 
@@ -208,7 +207,7 @@ static void __exit timerleds_exit(void){
     gpiod_put(desc_button);
     kfree(sequence_array);
     del_timer_sync(&timer);
-    flush_scheduled_work(&work);
+    flush_scheduled_work();
 }
 
 module_init(timerleds_init);
