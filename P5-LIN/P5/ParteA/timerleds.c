@@ -104,14 +104,13 @@ static void leds_seq(unsigned int led_mask){
 //Funcion a invocar cuando el timer acaba
 static void fire_timer(struct timer_list *t){
 
-    if(sequence_array[seq_index]!=-1){
-        leds_seq(sequence_array[seq_index]);
-        seq_index++;
-    }
-    else{ //Vuelve a empezar la sequencia
-        seq_index = 0;
-    }
+    leds_seq(sequence_array[seq_index]);    
+    seq_index++;if(sequence_array[seq_index]==-1)
+        seq_index=0;
 
+    
+    if(sequence_array[seq_index]==-1)
+        seq_index=0;
     
     mod_timer(t, jiffies + timer_period_jiffies);
 }

@@ -339,7 +339,7 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
     char* aux;
     char* token;
     struct music_step* aux_melody;
-    
+    //USAR VMALLOC Y COMPROBAR TAMAÑO DE BUFFER LEN
     kbuf = kmalloc(len + 1, GFP_KERNEL);
     
     if(!kbuf)
@@ -370,7 +370,7 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
             return -EBUSY;
         }
         
-        spin_unlock_irqrestore(&sp, flags);
+        spin_unlock_irqrestore(&sp, flags); //MOVER ABAJO
         
         //Se avanza el puntero 6 espacios para que se posicione en el primer caracter de la melodia escrita
         aux+=6; 
