@@ -20,13 +20,13 @@
 
 
 
-/* Frequency of selected notes in centihertz */
+/* Frequency of selected notes in centihertz
 #define C4 26163
 #define D4 29366
 #define E4 32963
 #define F4 34923
 #define G4 39200
-#define C5 52325
+#define C5 52325 */
 
 /*
  *  Prototypes
