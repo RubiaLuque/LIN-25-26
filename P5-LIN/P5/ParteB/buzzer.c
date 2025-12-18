@@ -41,7 +41,7 @@ static ssize_t buzzer_write(struct file *, const char *, size_t, loff_t *);
 #define SUCCESS 0
 #define MANUAL_DEBOUNCE
 #define DEVICE_NAME "buzzer"
-#define PWM_DEVICE_NAME "pwm_buzzer"
+#define PWM_DEVICE_NAME "pwmchip0"
 #define BUF_LEN 10
 
 #define GPIO_BUTTON 22
@@ -50,16 +50,6 @@ static int gpio_button_irqn = -1;
 
 static struct pwm_device *pwm_device = NULL;
 static struct pwm_state pwm_state;
-static struct cdev *pwm_cdev = NULL;
-static struct class *pwm_class = NULL;
-static dev_t start;
-
-static struct miscdevice pwm_misc_device{
-    .minor = MISC_DYNAMIC_MINOR,
-    .name = DEVICE_NAME,
-    .fops = &fops,
-    .mode = 0666
-}
 
 /* Structure to represent a note or rest in a melodic line  */
 struct music_step
@@ -99,10 +89,61 @@ typedef enum {
 
 static buzzer_request_t buzzer_request=REQUEST_NONE;
 
+/* Transform frequency in centiHZ into period in nanoseconds */
+static inline unsigned int freq_to_period_ns(unsigned int frequency)
+{
+    if (frequency == 0)
+    return 0;
+    else
+    return DIV_ROUND_CLOSEST_ULL(100000000000UL, frequency);
+}
+
+/* Check if the current step is and end marker */
+static inline int is_end_marker(struct music_step *step)
+{
+    return (step->freq == 0 && step->len == 0);
+}
+
+/**
+ *  Transform note length into ms,
+ * taking the beat of a quarter note as reference
+ */
+static inline int calculate_delay_ms(unsigned int note_len, unsigned int qnote_ref)
+{
+    unsigned char duration = (note_len & 0x7f);
+    unsigned char triplet = (note_len & 0x80);
+    unsigned char i = 0;
+    unsigned char current_duration;
+    int total = 0;
+    
+    /* Calculate the total duration of the note
+    * as the summation of the figures that make
+    * up this note (bits 0-6)
+    */
+   while (duration) {
+       current_duration = (duration) & (1 << i);
+       
+       if (current_duration) {
+           /* Scale note accordingly */
+           if (triplet)
+           current_duration = (current_duration * 3) / 2;
+           /*
+           * 24000/qnote_ref denote number of ms associated
+           * with a whole note (redonda)
+           */
+          total += (240000) / (qnote_ref * current_duration);
+          /* Clear bit */
+          duration &= ~(1 << i);
+        }
+        i++;
+    }
+    return total;
+}
+
 //Manejador del trabajo del boton
 static void button_wq_function(struct work_struct* work){
     unsigned long flags;
-    struct buzzer_state_t state;
+    buzzer_state_t state;
 
     spin_lock_irqsave(&sp, flags);
     state=buzzer_state;
@@ -124,8 +165,8 @@ static void button_wq_function(struct work_struct* work){
 
 static void play_wq_function(struct work_struct* work){
     unsigned long flags;
-    struct buzzer_state_t state;
-    struct buzzer_request_t request;
+    buzzer_state_t state;
+    buzzer_request_t request;
     struct music_step note;
     int play_next = 0;
     int curr_beat;
@@ -206,7 +247,7 @@ static void play_wq_function(struct work_struct* work){
 			pwm_disable(pwm_device);
 		}
 
-        mod_timer(&timer, jiffies + msecstojiffies(calculate_delay_ms(note.len, curr_beat)));
+        mod_timer(&timer, jiffies + msecs_to_jiffies(calculate_delay_ms(note.len, curr_beat)));
     }
 }
 
@@ -250,63 +291,7 @@ static irqreturn_t gpio_irq_handler(int irq, void *dev_id){
     return IRQ_HANDLED;
 }
 
-/* Transform frequency in centiHZ into period in nanoseconds */
-static inline unsigned int freq_to_period_ns(unsigned int frequency)
-{
-    if (frequency == 0)
-    return 0;
-	else
-    return DIV_ROUND_CLOSEST_ULL(100000000000UL, frequency);
-}
 
-/* Check if the current step is and end marker */
-static inline int is_end_marker(struct music_step *step)
-{
-    return (step->freq == 0 && step->len == 0);
-}
-
-/**
- *  Transform note length into ms,
- * taking the beat of a quarter note as reference
- */
-static inline int calculate_delay_ms(unsigned int note_len, unsigned int qnote_ref)
-{
-    unsigned char duration = (note_len & 0x7f);
-	unsigned char triplet = (note_len & 0x80);
-	unsigned char i = 0;
-	unsigned char current_duration;
-	int total = 0;
-    
-	/* Calculate the total duration of the note
-    * as the summation of the figures that make
-    * up this note (bits 0-6)
-    */
-   while (duration) {
-       current_duration = (duration) & (1 << i);
-       
-       if (current_duration) {
-           /* Scale note accordingly */
-           if (triplet)
-           current_duration = (current_duration * 3) / 2;
-           /*
-           * 24000/qnote_ref denote number of ms associated
-           * with a whole note (redonda)
-           */
-          total += (240000) / (qnote_ref * current_duration);
-          /* Clear bit */
-          duration &= ~(1 << i);
-		}
-		i++;
-	}
-	return total;
-}
-
-static struct file_operations fops = {
-    .read = buzzer_read,
-    .write = buzzer_write,
-    .open = buzzer_open,
-    .release = buzzer_release
-};
 
 static int buzzer_open(struct inode *inode, struct file *file){
     if(!try_module_get(THIS_MODULE)){
@@ -317,7 +302,7 @@ static int buzzer_open(struct inode *inode, struct file *file){
 
 static int buzzer_release(struct inode *inode, struct file *file){
     module_put(THIS_MODULE);
-
+    
     return 0;
 }
 
@@ -325,46 +310,46 @@ static ssize_t buzzer_read(struct file *file, char __user * buffer, size_t len, 
     char kbuf[BUF_LEN];
     unsigned long flags;
     int _beat;
-
+    
     if((*off)>0)
-        return 0;
-
+    return 0;
+    
     spin_lock_irqsave(&sp, flags);
     _beat = beat;
     spin_unlock_irqrestore(&sp, flags);
-
+    
     sprintf(kbuf, "beat=%d\n", _beat);
     if(len < strlen(kbuf)){
         return -ENOSPC;
     }
-
+    
     if(copy_to_user(buffer, kbuf, strlen(kbuf))){
         return -EFAULT;
     }
-
+    
     (*off)+= strlen(kbuf);
     return strlen(kbuf);
 }
 
-static ssize_t buzzer_write(struct file *file, char __user * buffer, size_t len, loff_t *off){
+static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_t len, loff_t *off){
     unsigned long flags;
-
+    
     char* kbuf;
     unsigned int _beat;
     char* aux;
     char* token;
     struct music_step* aux_melody;
-
-    kbuf = kmalloc(len + 1, GFP_KERNEL);
-
-    if(!kbuf)
-        return -ENOMEM;
     
-    if(copy_from_user(&kbuf, buffer, len)){
+    kbuf = kmalloc(len + 1, GFP_KERNEL);
+    
+    if(!kbuf)
+    return -ENOMEM;
+    
+    if(copy_from_user(kbuf, buffer, len)){
         kfree(kbuf);
         return -EFAULT;
     }
-
+    
     kbuf[len] = '\0';
     aux = kbuf;
     //El usuario scribe el beat de la cancion
@@ -384,12 +369,12 @@ static ssize_t buzzer_write(struct file *file, char __user * buffer, size_t len,
             printk(KERN_INFO "Unable to change music while playing.\n");
             return -EBUSY;
         }
-
+        
         spin_unlock_irqrestore(&sp, flags);
-
+        
         //Se avanza el puntero 6 espacios para que se posicione en el primer caracter de la melodia escrita
         aux+=6; 
-
+        
         aux_melody = melody;
         while((token = strsep(&aux, ","))!=NULL){
             unsigned int _len, _freq;
@@ -403,16 +388,16 @@ static ssize_t buzzer_write(struct file *file, char __user * buffer, size_t len,
                 return -EINVAL;
             }
         }
-
+        
         //Terminacion final de la melodia
         aux_melody->freq = 0;
         aux_melody->len = 0;
-
+        
         spin_lock_irqsave(&sp, flags);
         buzzer_request = REQUEST_CONFIG;
         spin_unlock_irqrestore(&sp, flags);
 		schedule_work(&play);
-
+        
         
         
     }
@@ -423,9 +408,22 @@ static ssize_t buzzer_write(struct file *file, char __user * buffer, size_t len,
     
     kfree(kbuf);
     return len;
-
+    
 }
 
+static struct file_operations fops = {
+    .read = buzzer_read,
+    .write = buzzer_write,
+    .open = buzzer_open,
+    .release = buzzer_release
+};
+
+static struct miscdevice pwm_misc_device = {
+    .minor = MISC_DYNAMIC_MINOR,
+    .name = DEVICE_NAME,
+    .fops = &fops,
+    .mode = 0666
+};
 
 static int pwm_module_init(void)
 {
@@ -455,14 +453,14 @@ static int pwm_module_init(void)
     //Requesting GPIO Button
     if((err = gpio_request(GPIO_BUTTON, "button"))){
         pr_err("ERROR: GPIO %d request\n", GPIO_BUTTON);
-        goto err_handle;
+        goto err_handler;
     }
 
     //Button descriptor
     if(!(desc_button = gpio_to_desc(GPIO_BUTTON))){
         pr_err("GPIO %d is not valid\n", GPIO_BUTTON);
         err = -EINVAL;
-        goto err_handle;
+        goto err_handler;
     }
 
     gpio_out_ok = 1;
@@ -481,7 +479,7 @@ static int pwm_module_init(void)
                    NULL)){
         pr_err("my_device: cannot register IRQ");
         err = -EINVAL;
-        goto err_handle;
+        goto err_handler;
     }
 
     melody = vmalloc(PAGE_SIZE);
@@ -489,7 +487,7 @@ static int pwm_module_init(void)
         pr_err("Unable to allocate memory for melody\n");
         err = -ENOMEM;
         free_irq(gpio_button_irqn, NULL);
-        goto err_handle;
+        goto err_handler;
     }
     memset(melody, 0, PAGE_SIZE);
     //Timer setup
@@ -503,11 +501,11 @@ static int pwm_module_init(void)
 
 	return 0;
 
-err_handle:
+err_handler:
     pwm_free(pwm_device);
     misc_deregister(&pwm_misc_device);
     if(gpio_out_ok){
-        gpio_free(desc_button);
+        gpiod_put(desc_button);
     }
     
     return err;
