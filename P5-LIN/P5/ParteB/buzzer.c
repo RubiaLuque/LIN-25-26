@@ -339,14 +339,17 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
     char* aux;
     char* token;
     struct music_step* aux_melody;
-    //USAR VMALLOC Y COMPROBAR TAMAÑO DE BUFFER LEN
-    kbuf = kmalloc(len + 1, GFP_KERNEL);
+    if(len > PAGE_SIZE){
+        return -ENOSPC;
+    }
+
+    kbuf = vmalloc(PAGE_SIZE);
     
     if(!kbuf)
     return -ENOMEM;
     
     if(copy_from_user(kbuf, buffer, len)){
-        kfree(kbuf);
+        vfree(kbuf);
         return -EFAULT;
     }
     
@@ -365,12 +368,11 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
         spin_lock_irqsave(&sp, flags);
         if(buzzer_state == BUZZER_PLAYING){
             spin_unlock_irqrestore(&sp, flags);
-            kfree(kbuf);
+            vfree(kbuf);
             printk(KERN_INFO "Unable to change music while playing.\n");
             return -EBUSY;
         }
         
-        spin_unlock_irqrestore(&sp, flags); //MOVER ABAJO
         
         //Se avanza el puntero 6 espacios para que se posicione en el primer caracter de la melodia escrita
         aux+=6; 
@@ -384,7 +386,7 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
                 aux_melody++;
             }
             else{
-                kfree(kbuf);
+                vfree(kbuf);
                 return -EINVAL;
             }
         }
@@ -392,6 +394,8 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
         //Terminacion final de la melodia
         aux_melody->freq = 0;
         aux_melody->len = 0;
+
+        spin_unlock_irqrestore(&sp, flags);
         
         spin_lock_irqsave(&sp, flags);
         buzzer_request = REQUEST_CONFIG;
@@ -402,11 +406,11 @@ static ssize_t buzzer_write(struct file *file, const char __user * buffer, size_
         
     }
     else{
-        kfree(kbuf);
+        vfree(kbuf);
         return -EINVAL;
     }
     
-    kfree(kbuf);
+    vfree(kbuf);
     return len;
     
 }
